@@ -22,8 +22,14 @@ class CrawlException(Exception):
         self.retriable = retriable
 
 class Crawler:
-    def __init__(self, crawldir):
+    def __init__(self, crawldir, proxy_url=None):
         self.crawldir = crawldir
+
+        if proxy_url:
+            self.proxy_dict = dict(http=proxy_url) # socks5h://localhost:5000'
+        else:
+            self.proxy_dict = dict()
+
         # set of everything we have crawled (for deduping)
         self.crawled = set()
         # queue of stuff to crawl
@@ -83,7 +89,7 @@ class Crawler:
         filesafe = re.sub("\.", "_", node)
         filename = os.path.join(self.crawldir, f'{filesafe}.json')
         if os.path.isfile(filename):
-            logging.info(f'skipping crawl of {node}')
+            logging.info(f'using crawl file {filename} for {node}')
             f = open(filename, "r")
             result = json.load(f)
             f.close()
@@ -91,7 +97,7 @@ class Crawler:
             try:
                 response = requests.get(
                     f'http://{node}/cgi-bin/sysinfo.json?link_info=1&lqm=1',
-                    proxies=dict(http='socks5h://localhost:5000'),
+                    proxies=self.proxy_dict,
                     timeout=60,
                 )
             except Exception as e:
@@ -138,7 +144,8 @@ def main():
         description='Crawls an AREDN mesh',
         #epilog='Text at the bottom of help'
     )
-    parser.add_argument("--crawldir", nargs="?", default="/tmp/crawl", help="directory to store crawl files. creates if doesn't exist. skips crawling nodes that have a file here")
+    parser.add_argument("--crawldir", nargs="?", default="/tmp/crawl", help="directory to store crawl files. creates if doesn't exist. skips crawling nodes that have a file here. default /tmp/crawl")
+    parser.add_argument("--proxy", nargs="?", default=None, help="proxy url (e.g. \"socks5h://localhost:5000\") to use for requests to mesh nodes. default no proxy")
 
     args = parser.parse_args()
 
@@ -151,7 +158,7 @@ def main():
 
     # get the starting node's ip address
 
-    crawler = Crawler(crawldir=args.crawldir)
+    crawler = Crawler(crawldir=args.crawldir, proxy_url=args.proxy)
     for node_name in sys.stdin:
         node_name = node_name.strip()
         crawler.to_crawl.appendleft(node_name)
