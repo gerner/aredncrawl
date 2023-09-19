@@ -6,12 +6,14 @@ rf) between them. """
 # handy awk to convert a kml export from ... to colored kml:
 # cat /tmp/meshmap.kml | awk '/name="stroke"/ { print $0; match($0, "<value>#([a-fA-F0-9]{2})([a-fA-F0-9]{2})([a-fA-F0-9]{2})</value>", a); style=sprintf("<Style><LineStyle><color>ff%s%s%s</color><width>3</width></LineStyle></Style>",a[3], a[2], a[1]); next;} /<LineString>/ { print style; print $0; next; } { print $0 }' > /tmp/meshmap_processed.kml
 
+import sys
 import os
 import os.path
 import re
 import json
 from collections import defaultdict
 import argparse
+import logging
 
 import graphviz # type: ignore
 
@@ -53,6 +55,12 @@ def choose_style(link_type):
         return {"stroke": "#999999"}
 
 def main():
+    logging.basicConfig(
+            format="%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
+            stream=sys.stderr,
+            level=logging.INFO
+    )
+
     parser = argparse.ArgumentParser(
         prog='crawl',
         description='Crawls an AREDN mesh',
@@ -80,13 +88,19 @@ def main():
     g = graphviz.Digraph("mesh")
 
     file_list = os.listdir(args.crawldir)
+
+    crawled_node_count = 0
+    known_nodes = set()
+
     for filename in file_list:
+        crawled_node_count += 1
+
         node_name = re.sub("_", ".", re.sub(".json$", "", filename))
+        known_nodes.add(node_name)
 
         f = open(os.path.join(args.crawldir, filename), "r")
         result = json.load(f)
         f.close()
-
 
         has_ll = False
         if node_name in override_coords:
@@ -116,6 +130,7 @@ def main():
         if len(result["link_info"]) == 0:
             continue
         for k,v in result["link_info"].items():
+            known_nodes.add(k)
             g.edge(node_name, k, label=v["linkType"])
             node_links[node_name].append( (k, v["linkType"]), )
 
@@ -132,6 +147,8 @@ def main():
     f = open("mesh_map.json", "w")
     json.dump(geojson, f)
     f.close()
+
+    logging.info(f'crawled {crawled_node_count} discovered {len(known_nodes)}')
 
 if __name__ == "__main__":
     main()
