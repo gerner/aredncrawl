@@ -93,6 +93,8 @@ def main():
     known_nodes = set()
 
     for filename in file_list:
+        if not re.match("^.*[.]json$", filename):
+            continue
         crawled_node_count += 1
 
         node_name = re.sub("_", ".", re.sub(".json$", "", filename))
